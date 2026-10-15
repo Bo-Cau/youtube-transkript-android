@@ -1,0 +1,53 @@
+name: APK bauen
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code holen
+        uses: actions/checkout@v4
+
+      - name: Java einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Signierschlüssel auspacken
+        run: base64 -d app/transkript.jks.b64 > app/transkript.jks
+
+      - name: Android SDK einrichten
+        uses: android-actions/setup-android@v3
+
+      - name: Gradle einrichten
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: APK bauen
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: APK umbenennen
+        run: cp app/build/outputs/apk/release/app-release.apk "YouTube-Transkript-${{ github.run_number }}.apk"
+
+      - name: APK als Download bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: YouTube-Transkript-APK
+          path: YouTube-Transkript-${{ github.run_number }}.apk
+
+      - name: Release mit APK anlegen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: YouTube-Transkript 1.0.${{ github.run_number }}
+          body: APK herunterladen und auf dem Handy öffnen, um die App zu installieren.
+          files: YouTube-Transkript-${{ github.run_number }}.apk
