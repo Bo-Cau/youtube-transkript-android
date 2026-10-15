@@ -13,19 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Code holen
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Java einrichten
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Signierschlüssel auspacken
         run: base64 -d app/transkript.jks.b64 > app/transkript.jks
-
-      - name: Android SDK einrichten
-        uses: android-actions/setup-android@v3
 
       - name: Gradle einrichten
         uses: gradle/actions/setup-gradle@v4
