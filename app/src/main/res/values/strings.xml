@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">YouTube-Transkript</string>
+    <string name="share_target_label">Transkribieren</string>
+
+    <string name="hint_url">YouTube-Link einfügen</string>
+    <string name="hint_languages">Sprachen, z. B. de, en, fr</string>
+    <string name="paste">Einfügen</string>
+    <string name="transcribe">Transkribieren</string>
+    <string name="timestamps">Mit Zeitstempeln</string>
+    <string name="save">Speichern</string>
+    <string name="share">Teilen</string>
+    <string name="copy">Kopieren</string>
+    <string name="result_hint">Hier erscheint das Transkript.\n\nTipp: In der YouTube-App auf „Teilen“ tippen und „Transkribieren“ wählen, dann startet alles automatisch.</string>
+
+    <string name="status_ready">Link einfügen und auf „Transkribieren“ tippen.</string>
+    <string name="status_loading">Lade Untertitel …</string>
+    <string name="status_done">Fertig: %1$d Wörter · %2$s · %3$s</string>
+    <string name="status_failed">Das hat nicht geklappt</string>
+    <string name="kind_generated">automatisch erzeugt</string>
+    <string name="kind_manual">manuell erstellt</string>
+
+    <string name="share_title">Transkript teilen</string>
+    <string name="saved">Gespeichert</string>
+    <string name="copied">Kopiert</string>
+    <string name="clipboard_empty">Die Zwischenablage ist leer.</string>
+
+    <string name="error_no_link">Das sieht nicht nach einem YouTube-Link aus.</string>
+    <string name="error_offline">Keine Internetverbindung.</string>
+    <string name="error_timeout">YouTube hat nicht rechtzeitig geantwortet. Bitte erneut versuchen.</string>
+    <string name="error_network">Netzwerkfehler: %1$s</string>
+    <string name="error_unexpected">Unerwarteter Fehler (%1$s): %2$s</string>
+    <string name="error_unknown">Unbekannter Fehler.</string>
+    <string name="error_save">Speichern fehlgeschlagen: %1$s</string>
+    <string name="error_no_file_app">Auf diesem Gerät gibt es keine App zum Speichern von Dateien.</string>
+    <string name="error_no_share_app">Keine App zum Teilen gefunden.</string>
+    <string name="error_too_long_to_share">Der Text ist zu lang zum Teilen. Bitte „Speichern“ verwenden.</string>
+</resources>
