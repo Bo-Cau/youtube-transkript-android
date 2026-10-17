@@ -50,12 +50,42 @@
         android:inputType="text"
         android:maxLines="1" />
 
-    <CheckBox
-        android:id="@+id/timestampBox"
+    <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="@string/timestamps" />
+        android:layout_marginTop="8dp"
+        android:text="@string/layout_label"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textSize="13sp" />
+
+    <RadioGroup
+        android:id="@+id/layoutGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <RadioButton
+            android:id="@+id/layoutParagraphs"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:checked="true"
+            android:text="@string/layout_paragraphs" />
+
+        <RadioButton
+            android:id="@+id/layoutCompact"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/layout_compact" />
+
+        <RadioButton
+            android:id="@+id/layoutTimestamps"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/layout_timestamps" />
+    </RadioGroup>
 
     <ProgressBar
         android:id="@+id/progress"
