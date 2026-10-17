@@ -14,9 +14,9 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
-import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ProgressBar
+import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
 import java.io.IOException
@@ -25,11 +25,18 @@ import java.net.UnknownHostException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
+/** Dateiformate zum Speichern. */
+enum class ExportFormat(val extension: String, val mimeType: String) {
+    TXT("txt", "text/plain"),
+    DOCX("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    PDF("pdf", "application/pdf")
+}
+
 class MainActivity : Activity() {
 
     private lateinit var urlInput: EditText
     private lateinit var langInput: EditText
-    private lateinit var timestampBox: CheckBox
+    private lateinit var layoutGroup: RadioGroup
     private lateinit var pasteButton: Button
     private lateinit var transcribeButton: Button
     private lateinit var saveButton: Button
@@ -42,8 +49,10 @@ class MainActivity : Activity() {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
 
     private var lastResult: TranscriptResult? = null
+    private var currentDoc: TranscriptDocument? = null
     private var documentText: String = ""
     private var documentTitle: String = ""
+    private var pendingFormat: ExportFormat = ExportFormat.TXT
     private var busy = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,7 +61,7 @@ class MainActivity : Activity() {
 
         urlInput = findViewById(R.id.urlInput)
         langInput = findViewById(R.id.langInput)
-        timestampBox = findViewById(R.id.timestampBox)
+        layoutGroup = findViewById(R.id.layoutGroup)
         pasteButton = findViewById(R.id.pasteButton)
         transcribeButton = findViewById(R.id.transcribeButton)
         saveButton = findViewById(R.id.saveButton)
@@ -64,11 +73,12 @@ class MainActivity : Activity() {
 
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         langInput.setText(prefs.getString(KEY_LANGUAGES, DEFAULT_LANGUAGES) ?: DEFAULT_LANGUAGES)
-        timestampBox.isChecked = prefs.getBoolean(KEY_TIMESTAMPS, false)
+        val savedLayout = prefs.getString(KEY_LAYOUT, Layout.PARAGRAPHS.name) ?: Layout.PARAGRAPHS.name
+        layoutGroup.check(radioIdFor(layoutFromName(savedLayout)))
 
         pasteButton.setOnClickListener { pasteFromClipboard() }
         transcribeButton.setOnClickListener { startTranscription() }
-        saveButton.setOnClickListener { saveAsFile() }
+        saveButton.setOnClickListener { chooseFormatAndSave() }
         shareButton.setOnClickListener { shareText() }
         copyButton.setOnClickListener { copyText() }
         urlInput.setOnEditorActionListener { _, actionId, _ ->
@@ -79,9 +89,9 @@ class MainActivity : Activity() {
                 false
             }
         }
-        timestampBox.setOnCheckedChangeListener { _, checked ->
+        layoutGroup.setOnCheckedChangeListener { _, _ ->
             getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-                .putBoolean(KEY_TIMESTAMPS, checked)
+                .putString(KEY_LAYOUT, selectedLayout().name)
                 .apply()
             lastResult?.let { showResult(it) }
         }
@@ -89,8 +99,9 @@ class MainActivity : Activity() {
         if (savedInstanceState != null) {
             documentText = savedInstanceState.getString(STATE_TEXT, "") ?: ""
             documentTitle = savedInstanceState.getString(STATE_TITLE, "") ?: ""
-            resultText.text = documentText
             statusText.text = savedInstanceState.getString(STATE_STATUS, "") ?: ""
+            pendingFormat = formatFromName(savedInstanceState.getString(STATE_FORMAT, ExportFormat.TXT.name))
+            resultText.text = documentText
         }
         setResultButtonsEnabled(documentText.isNotEmpty())
 
@@ -108,6 +119,7 @@ class MainActivity : Activity() {
         outState.putString(STATE_TEXT, documentText)
         outState.putString(STATE_TITLE, documentTitle)
         outState.putString(STATE_STATUS, statusText.text.toString())
+        outState.putString(STATE_FORMAT, pendingFormat.name)
     }
 
     override fun onDestroy() {
@@ -122,6 +134,26 @@ class MainActivity : Activity() {
         urlInput.setText(findUrl(shared) ?: shared.trim())
         startTranscription()
     }
+
+    // ------------------------------------------------------------------ Darstellung
+
+    private fun selectedLayout(): Layout = when (layoutGroup.checkedRadioButtonId) {
+        R.id.layoutCompact -> Layout.COMPACT
+        R.id.layoutTimestamps -> Layout.TIMESTAMPS
+        else -> Layout.PARAGRAPHS
+    }
+
+    private fun radioIdFor(layout: Layout): Int = when (layout) {
+        Layout.COMPACT -> R.id.layoutCompact
+        Layout.TIMESTAMPS -> R.id.layoutTimestamps
+        Layout.PARAGRAPHS -> R.id.layoutParagraphs
+    }
+
+    private fun layoutFromName(name: String): Layout =
+        Layout.values().firstOrNull { it.name == name } ?: Layout.PARAGRAPHS
+
+    private fun formatFromName(name: String?): ExportFormat =
+        ExportFormat.values().firstOrNull { it.name == name } ?: ExportFormat.TXT
 
     // ------------------------------------------------------------------ Transkribieren
 
@@ -142,6 +174,7 @@ class MainActivity : Activity() {
         hideKeyboard()
         setBusy(true)
         lastResult = null
+        currentDoc = null
         documentText = ""
         documentTitle = ""
         resultText.text = ""
@@ -161,11 +194,13 @@ class MainActivity : Activity() {
 
     private fun showResult(result: TranscriptResult) {
         lastResult = result
+        val doc = TranscriptFormatter.build(result, selectedLayout())
+        currentDoc = doc
         documentTitle = result.title
-        documentText = TranscriptFormatter.document(result, timestampBox.isChecked)
+        documentText = TranscriptFormatter.toText(doc)
         resultText.text = documentText
 
-        val words = TranscriptFormatter.wordCount(TranscriptFormatter.body(result.segments, false))
+        val words = TranscriptFormatter.wordCount(doc.paragraphs.joinToString(" "))
         val kind = if (result.track.isGenerated) getString(R.string.kind_generated) else getString(R.string.kind_manual)
         statusText.text = getString(R.string.status_done, words, result.track.name, kind)
         setResultButtonsEnabled(true)
@@ -187,14 +222,34 @@ class MainActivity : Activity() {
             .show()
     }
 
-    // ------------------------------------------------------------------ Ergebnis weiterverwenden
+    // ------------------------------------------------------------------ Speichern
 
-    private fun saveAsFile() {
+    private fun chooseFormatAndSave() {
         if (documentText.isEmpty()) return
+        val labels = arrayOf<CharSequence>(
+            getString(R.string.format_txt),
+            getString(R.string.format_docx),
+            getString(R.string.format_pdf)
+        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.save_as)
+            .setItems(labels) { _, which ->
+                val format = when (which) {
+                    1 -> ExportFormat.DOCX
+                    2 -> ExportFormat.PDF
+                    else -> ExportFormat.TXT
+                }
+                saveAs(format)
+            }
+            .show()
+    }
+
+    private fun saveAs(format: ExportFormat) {
+        pendingFormat = format
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TITLE, TranscriptFormatter.fileName(documentTitle))
+            type = format.mimeType
+            putExtra(Intent.EXTRA_TITLE, TranscriptFormatter.fileName(documentTitle, format.extension))
         }
         try {
             startActivityForResult(intent, REQUEST_SAVE)
@@ -208,26 +263,38 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_SAVE || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
-        writeToUri(uri, documentText)
+        val doc = currentDoc ?: TranscriptFormatter.fromText(documentTitle, documentText)
+        writeToUri(uri, pendingFormat, doc, documentText)
     }
 
-    private fun writeToUri(uri: Uri, text: String) {
+    private fun writeToUri(uri: Uri, format: ExportFormat, doc: TranscriptDocument, text: String) {
+        statusText.text = getString(R.string.status_saving)
         executor.execute {
             val outcome = runCatching {
-                val stream = contentResolver.openOutputStream(uri, "w")
+                val stream = contentResolver.openOutputStream(uri, "wt")
                     ?: throw IOException("Datei konnte nicht geöffnet werden")
-                stream.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                stream.use { out ->
+                    when (format) {
+                        ExportFormat.TXT -> out.write(text.toByteArray(Charsets.UTF_8))
+                        ExportFormat.DOCX -> DocxWriter.write(doc, out)
+                        ExportFormat.PDF -> PdfWriter.write(doc, out)
+                    }
+                }
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (outcome.isSuccess) {
+                    statusText.text = getString(R.string.saved_as, format.extension.uppercase())
                     toast(getString(R.string.saved))
                 } else {
+                    statusText.text = getString(R.string.status_failed)
                     toast(getString(R.string.error_save, outcome.exceptionOrNull()?.message ?: ""))
                 }
             }
         }
     }
+
+    // ------------------------------------------------------------------ Teilen, Kopieren, Einfügen
 
     private fun shareText() {
         if (documentText.isEmpty()) return
@@ -300,12 +367,13 @@ class MainActivity : Activity() {
     companion object {
         private const val PREFS_NAME = "einstellungen"
         private const val KEY_LANGUAGES = "sprachen"
-        private const val KEY_TIMESTAMPS = "zeitstempel"
+        private const val KEY_LAYOUT = "darstellung"
         private const val DEFAULT_LANGUAGES = "de, en, fr, es, it, pt"
 
         private const val STATE_TEXT = "text"
         private const val STATE_TITLE = "titel"
         private const val STATE_STATUS = "status"
+        private const val STATE_FORMAT = "format"
 
         private const val REQUEST_SAVE = 1
         private const val MAX_SHARE_CHARS = 400_000
